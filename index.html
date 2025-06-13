@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>现场抽奖大屏</title>
+    <style>
+        body {
+            font-family: 'Arial', 'Microsoft Yahei', sans-serif;
+            background: #181c2a;
+            color: #fff;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {margin-top: 30px;}
+        #awardTitle {font-size: 2.5rem; margin: 40px 0 20px;}
+        #rollingNumbers {
+            font-size: 3.2rem;
+            margin: 40px 0;
+            letter-spacing: 1rem;
+        }
+        #winnersList {font-size: 2.2rem; margin-top: 30px;}
+        .btn {
+            font-size: 1.5rem;
+            padding: 12px 40px;
+            margin: 20px 10px;
+            border: none;
+            border-radius: 10px;
+            background: #3c72e2;
+            color: #fff;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn[disabled] {background: #aaa; cursor: not-allowed;}
+    </style>
+</head>
+<body>
+    <h1>现场抽奖大屏</h1>
+    <div id="awardTitle">五等奖（6人）</div>
+    <div id="rollingNumbers">--</div>
+    <button class="btn" id="startBtn">开始抽奖</button>
+    <button class="btn" id="stopBtn" disabled>停止</button>
+    <button class="btn" id="nextAwardBtn" style="background:#2cb978;">下一个奖项</button>
+    <div id="winnersList"></div>
+    <script>
+        // 奖项设置
+        const awards = [
+            { name: "五等奖（6人）", count: 6, repeat: false },
+            { name: "四等奖（5人）", count: 5, repeat: false },
+            { name: "三等奖（3人）", count: 3, repeat: false },
+            { name: "二等奖（1人）", count: 1, repeat: true },
+            { name: "一等奖（1人）", count: 1, repeat: true }
+        ];
+        // 原始号码
+        const candidateNumbers = [12,8,11,35,2,1,17,40,5,10,31,22,38,16];
+        function pad(n) { return n.toString().padStart(2, '0'); }
+
+        let currentAwardIdx = 0;
+        let rollingTimer = null;
+
+        let usedNumbers = []; // 不可重复奖项已中奖号码
+        let resultForTwo = null; // 二等奖号码
+        let resultForOne = null; // 一等奖号码
+
+        function showAwardTitle() {
+            document.getElementById('awardTitle').innerText = awards[currentAwardIdx].name;
+            document.getElementById('winnersList').innerText = "";
+            document.getElementById('rollingNumbers').innerText = "--";
+        }
+
+        function getAvailableNumbers() {
+            // 五/四/三：全局去重；二/一：只跟自己之间去重
+            if (awards[currentAwardIdx].repeat) {
+                if (awards[currentAwardIdx].name.includes("二等奖")) {
+                    // 二等奖可用所有号码
+                    return candidateNumbers.slice();
+                }
+                if (awards[currentAwardIdx].name.includes("一等奖")) {
+                    // 一等奖去掉二等奖号码
+                    if (resultForTwo !== null) {
+                        return candidateNumbers.filter(n => n !== resultForTwo);
+                    } else {
+                        return candidateNumbers.slice();
+                    }
+                }
+                return candidateNumbers.slice();
+            } else {
+                // 不可重复奖项
+                return candidateNumbers.filter(n => !usedNumbers.includes(n));
+            }
+        }
+
+        function startRolling() {
+            if (rollingTimer) return;
+            let availableNumbers = getAvailableNumbers();
+            if (availableNumbers.length < awards[currentAwardIdx].count) {
+                document.getElementById('rollingNumbers').innerText = "号码不足";
+                return;
+            }
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            let pos = 0;
+            rollingTimer = setInterval(() => {
+                let showNums = [];
+                for (let i = 0; i < awards[currentAwardIdx].count; i++) {
+                    showNums.push(pad(availableNumbers[(pos + i) % availableNumbers.length]));
+                }
+                document.getElementById('rollingNumbers').innerText = showNums.join('  ');
+                pos = (pos + 1) % availableNumbers.length;
+            }, 50);
+        }
+
+        function stopRolling() {
+            if (!rollingTimer) return;
+            clearInterval(rollingTimer);
+            rollingTimer = null;
+            let availableNumbers = getAvailableNumbers();
+            let result = [];
+            let tempList = availableNumbers.slice();
+            for (let i = 0; i < awards[currentAwardIdx].count; i++) {
+                let idx = Math.floor(Math.random() * tempList.length);
+                result.push(tempList[idx]);
+                tempList.splice(idx, 1);
+            }
+            // 补零显示
+            let displayResult = result.map(pad).join('  ');
+            document.getElementById('rollingNumbers').innerText = displayResult;
+            document.getElementById('winnersList').innerText = "中奖号码：" + displayResult;
+
+            // 记录已中奖
+            if (!awards[currentAwardIdx].repeat) {
+                usedNumbers = usedNumbers.concat(result);
+            }
+            if (awards[currentAwardIdx].name.includes("二等奖")) {
+                resultForTwo = result[0];
+            }
+            if (awards[currentAwardIdx].name.includes("一等奖")) {
+                resultForOne = result[0];
+            }
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+        }
+
+        function nextAward() {
+            if (currentAwardIdx < awards.length - 1) {
+                currentAwardIdx++;
+                showAwardTitle();
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+            } else {
+                document.getElementById('awardTitle').innerText = "全部抽奖结束";
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('nextAwardBtn').disabled = true;
+            }
+        }
+
+        document.getElementById('startBtn').onclick = startRolling;
+        document.getElementById('stopBtn').onclick = stopRolling;
+        document.getElementById('nextAwardBtn').onclick = nextAward;
+
+        // 初始化
+        showAwardTitle();
+        document.getElementById('stopBtn').disabled = true;
+    </script>
+</body>
+</html>
